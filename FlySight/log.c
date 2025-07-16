@@ -93,6 +93,7 @@ static FIL gnssFile;
 static FIL sensorFile;
 static FIL rawFile;
 static FIL eventFile;
+static FIL MKlogFile;	//MK: Added debug log
 
 static uint8_t timer_id;
 
@@ -739,6 +740,22 @@ void FS_Log_Init(uint32_t temp_folder, uint8_t flags)
 		f_sync(&eventFile);
 	}
 
+	if (enable_flags & FS_LOG_ENABLE_MKLOG)	//MK: Added debug log
+	{
+		// Open MK debug log file
+		sprintf(path, "/temp/%04lu/mkdebug.csv", temp_folder);
+		if (f_open(&MKlogFile, path, FA_WRITE|FA_CREATE_ALWAYS) != FR_OK)
+		{
+			Error_Handler();
+		}
+
+		FS_Log_WriteCommonHeader(&MKlogFile);
+		f_printf(&MKlogFile, "$COL,EVNT,time,description\n");
+		f_printf(&MKlogFile, "$UNIT,EVNT,s,\n");
+		f_printf(&MKlogFile, "$DATA\n");
+		f_sync(&MKlogFile);
+	}
+
 	// Initialize update task
 	UTIL_SEQ_RegTask(1<<CFG_TASK_FS_LOG_UPDATE_ID, UTIL_SEQ_RFU, FS_Log_Update);
 	UTIL_SEQ_RegTask(1<<CFG_TASK_FS_LOG_SYNC_ID, UTIL_SEQ_RFU, FS_Log_Sync);
@@ -818,6 +835,10 @@ void FS_Log_DeInit(uint32_t temp_folder)
 	if (enable_flags & FS_LOG_ENABLE_EVENT)
 	{
 		f_close(&eventFile);
+	}
+	if (enable_flags & FS_LOG_ENABLE_MKLOG)	//MK: Added for debug log
+	{
+		f_close(&MKlogFile);
 	}
 
 	if (validDateTime)
@@ -1098,4 +1119,41 @@ void FS_Log_WriteEvent(const char *format, ...)
 	f_puts("\"\n", &eventFile);
 
 	f_sync(&eventFile);
+}
+
+void FS_Log_MKlog(const char *format, ...)	//MK: Added debug log
+{
+	const uint32_t time = HAL_GetTick();
+	char row[100];
+	char *ptr;
+	UINT bw;
+
+	va_list args;
+
+	if (!(enable_flags & FS_LOG_ENABLE_MKLOG))
+		return;
+
+	// Write to disk
+	ptr = row + sizeof(row);
+	ptr = writeInt32ToBuf(ptr, time, 3, 1, ',');
+	*(--ptr) = ',';
+	*(--ptr) = 'G';
+	*(--ptr) = 'O';
+	*(--ptr) = 'L';
+	*(--ptr) = 'K';
+	*(--ptr) = 'M';
+	*(--ptr) = '$';
+
+	f_write(&MKlogFile, ptr, row + sizeof(row) - ptr, &bw);
+
+	f_puts("\"", &MKlogFile);
+
+	va_start(args, format);
+	vsprintf(row, format, args);
+	f_puts(row, &MKlogFile);
+	va_end(args);
+
+	f_puts("\"\n", &MKlogFile);
+
+	f_sync(&MKlogFile);
 }

@@ -25,6 +25,8 @@
 #include "app_common.h"
 #include "config.h"
 #include "ff.h"
+#include "navMK.h"
+#include "WScomp.h"
 
 #define CONFIG_FIRST_ALARM  0x01
 #define CONFIG_FIRST_WINDOW 0x02
@@ -200,7 +202,37 @@ static const char defaultConfig[] =
 		";          alarms will be audible.\n"
 		"\n"
 		"Win_Top:       0 ; Silence window top (m)\n"
-		"Win_Bottom:    0 ; Silence window bottom (m)\n";
+		"Win_Bottom:    0 ; Silence window bottom (m)\n"
+		"\n"
+		"; MK Nav Settings\n"
+		"navMK_Pull_Lat:                 4445081  ; [0.00001°] Latitude of designated pull point\n"
+		"navMK_Pull_Lon:                 604054   ; [0.00001°] Longitude of designated pull point\n"
+		"navMK_Pull_Alt:                 1500     ; [m] Altitude of designated pull point\n"
+		"navMK_Leg1:                     135      ; [degree]\n"
+		"navMK_Leg2:                     90       ; [degree]\n"
+		"navMK_Leg3:                     0        ; [degree]\n"
+		"navMK_numLegs:                  3        ; [1] Amount of legs(if only 2 legs are used, leg1 is ignored. Fill out leg2 and leg3. If only one leg is used, use leg3."
+		"navMK_Average_Glide_Ratio:      100      ; [0.01]\n"
+		"navMK_Ground_Debug:             0        ; Set to 1 to use time instead of altitude (for debugging on the ground)"
+		"\n"
+		"WScomp_compwindow_top:          2600; [m] Top of the competition window, bravo-sound will play once when crossing (2500m for FAI)\n"
+		"WScomp_compwindow_bottom:       1500; [m] Bottom of the competition window, charlie-sound will play once when crossing (1500m for FAI)\n"
+		"WScomp_exit_max:                3350; [m] Maximum exit altitude for jump to count, too-high-sound will play if higher (3353m for FAI)\n"
+		"WScomp_exit_min:                3200; [m] Minimum exit altitude for jump to count, too-low-sound will play if lower (starting once this boundary has crossed for the first time) (3200m for FAI)\n"
+		"WScomp_valwindow_speed:         10; [m/s] Vertical speed to be exceeded to start validation window, exit-sound will play once when speed is exceeded (10m/s for FAI)\n"
+		"WScomp_valwindow_delay:         9; [s] Delay between Exceeding vertical speed and actual start of validation window, alpha-sound will play once after this delay (9s for FAI).\n"
+		"WScomp_GRP_lat:                 5804930; [0.00001°] Ground Reference point Latitude. Used in combination with position at start of validation window to calculate designated flight path.\n"
+		"WScomp_GRP_lon:                 1279159; [0.00001°] Ground Reference point Longitude. Used in combination with position at start of validation window to calculate designated flight path.\n"
+		"WScomp_DFP_width:               600; [m] Total width of designated flight path, currently not used for anything (600m for FAI)\n"
+		"WScomp_Ground_Debug:            0; Set to 1 for ground debugging using time instead of altitude\n"
+		"\n"
+		";Chirp Settings\n"
+		"chirp_control:                1   ; Set to 1 to enable chirp control. Chirp always starts in the exact middle of start freq and end freq and goes up or down from here.\n"
+		"chirp_control_min_freq:       500 ; [Hz] Lowest chirp start frequency\n"
+		"chirp_control_max_freq:       1500; [Hz] Highest chirp end frequency\n"
+		"chirp_control_rate:           100 ;[0.01Hz] Sets rate of chirps. Value of 100 equals 1Hz.\n"
+		"chirp_control_min_duration:   100 ; [ms] Minimum duration of a chirp\n"
+		"chirp_control_max_duration:   900 ; [ms] Maximum duration of a chirp. Make sure not to go higher than allowed by the rate of chirps. (If rate of chirps is at 1Hz, max duration must be below 1000ms to make sense)\n";
 
 void FS_Config_Init(void)
 {
@@ -219,6 +251,40 @@ void FS_Config_Init(void)
 	config.min_rate      = FS_CONFIG_RATE_ONE_HZ;
 	config.max_rate      = 5 * FS_CONFIG_RATE_ONE_HZ;
 	config.flatline      = 0;
+
+	config.chirp_control 		 		=	0;		//Set to 1 to activate chirp control
+	config.chirp_control_min_freq 		=	500;	//[Hz]
+	config.chirp_control_max_freq 		=	1500;	//[Hz]
+	config.chirp_control_rate 	 		=	100; 	//[0.01Hz] (100 => 1Hz)
+	config.chirp_control_min_duration 	=	100; 	//[ms]
+	config.chirp_control_max_duration 	=	900; 	//[ms]
+
+
+	//################## MK: whole next block added for navMK
+	config.pull_lat 		= 0;
+	config.pull_lon 		= 0;
+	config.pull_alt 		= 0;
+	config.leg1_heading  	= 0;
+	config.leg2_heading 	= 0;
+	config.leg3_heading 	= 0;
+	config.navMK_numLegs	= 3;
+	config.av_glide_ratio	= 0;
+	config.exit_altitude 	= 4000;	//500m below the flysight will play the "approaching exit altitude" sound and start to calculate the leg vectors. Once the pull point is reachable according to the vector calculations, "pull point reachable" will be played once.
+	config.navMK_jump_threshold = 75;	//threshold in downward velocity to detect exit
+	config.navMK_preturn_alert = 10;	//Switch to next leg if only a few meters are left in current leg. (for a 45° turn, switch 450m before if this setting is 10m/deg)
+	config.navMK_Ground_Debug=0;
+
+	//################## MK: whole next block added for WS Performance competition
+	config.WScomp_compwindow_top	= 2500;	//[m] Top of the competition window (2500m for FAI)
+	config.WScomp_compwindow_bottom	= 1500;	//[m] Bottom of the competition window (1500m for FAI)
+	config.WScomp_exit_max			= 3350;	//[m] Maximum exit altitude for jump to count (3353m for FAI)
+	config.WScomp_exit_min			= 3200;	//[m] Minimum exit altitude for jump to count (3200m for FAI)
+	config.WScomp_valwindow_speed	= 10;	//[m/s] Vertical speed to be exceeded to start validation window (10m/s for FAI)
+	config.WScomp_valwindow_delay	= 9;	//[s] Delay between Exceeding vertical speed and actual start of validation window (9s for FAI).
+	config.WScomp_GRP_lat			= 0;	//[0.00001°] Ground Reference point Latitude. Used in combination with position at start of validation window to calculate designated flight path.
+	config.WScomp_GRP_lon			= 0;	//[0.00001°] Ground Reference point Longitude. Used in combination with position at start of validation window to calculate designated flight path.
+	config.WScomp_DFP_width			= 600;	//[m] Total width of designated flight path (600m for FAI)
+	config.WScomp_Ground_Debug 		= 0;	//used to debug on ground
 
 	config.sp_rate       = 0;
 	config.sp_volume     = 0;
@@ -256,6 +322,7 @@ void FS_Config_Init(void)
 	config.enable_mag     = 1;
 	config.ble_tx_power   = 25;
 	config.enable_raw     = 1;
+	config.enable_mklog	  = 1;	//create MKlogfile in each folder
 	config.cold_start     = 0;
 
 	config.baro_odr       = 2;
@@ -305,20 +372,59 @@ FS_Config_Result_t FS_Config_Read(const char *filename)
 
 		#define HANDLE_VALUE(s,w,r,t) \
 			if ((t) && !strcmp(name, (s))) { (w) = (r); }
+			//s: Name of value in config File
+			//w: variable to be set
+			//r: value to be used to set variable
+			//t: condition of value to be met (if condition does not match, nothing is set)
 
 		HANDLE_VALUE("Model",     config.model,        val, val >= 0 && val <= 8);
 		HANDLE_VALUE("Rate",      config.rate,         val, val >= 40 && val <= 1000);
-		HANDLE_VALUE("Mode",      config.mode,         val, (val >= 0 && val <= 7) || (val == 11));
+		HANDLE_VALUE("Mode",      config.mode,         val, (val >= 0 && val <= 7) || (val == 11) || (val == 13) || (val == 14) || (val == 15) || (val == 16)); //MK: Added 13 FS_CONFIG_MODE_MK and 14 FS_CONFIG_MODE_NAVMK and 15 FS_CONFIG_MODE_WSCOMP and 16 FS_CONFIG_MODE_MKSPEED
 		HANDLE_VALUE("Min",       config.min,          val, TRUE);
 		HANDLE_VALUE("Max",       config.max,          val, TRUE);
 		HANDLE_VALUE("Limits",    config.limits,       val, val >= 0 && val <= 2);
 		HANDLE_VALUE("Volume",    config.volume,       8 - val, val >= 0 && val <= 8);
-		HANDLE_VALUE("Mode_2",    config.mode_2,       val, (val >= 0 && val <= 9) || (val == 11));
+		HANDLE_VALUE("Mode_2",    config.mode_2,       val, (val >= 0 && val <= 9) || (val == 11) || (val == 13) || (val == 14) || (val == 15) || (val == 16)) ; //MK: Added 13 FS_CONFIG_MODE_MK and 14 FS_CONFIG_MODE_NAVMK and 15 FS_CONFIG_MODE_WSCOMP and 16 FS_CONFIG_MODE_MKSPEED
 		HANDLE_VALUE("Min_Val_2", config.min_2,        val, TRUE);
 		HANDLE_VALUE("Max_Val_2", config.max_2,        val, TRUE);
 		HANDLE_VALUE("Min_Rate",  config.min_rate,     val * FS_CONFIG_RATE_ONE_HZ / 100, val >= 0);
 		HANDLE_VALUE("Max_Rate",  config.max_rate,     val * FS_CONFIG_RATE_ONE_HZ / 100, val >= 0);
 		HANDLE_VALUE("Flatline",  config.flatline,     val, val == 0 || val == 1);
+
+		//################## MK: whole next block added for chirp control
+		HANDLE_VALUE("chirp_control",    config.chirp_control,       					val, (val == 0 || val == 1)) ; 	//MK: Added for Chirp Control
+		HANDLE_VALUE("chirp_control_min_freq", config.chirp_control_min_freq,        	val, (val >= 200 || val <= 10000));						//MK: Added for Chirp Control
+		HANDLE_VALUE("chirp_control_max_freq", config.chirp_control_max_freq,        	val, (val >= 200 || val <= 10000));						//MK: Added for Chirp Control
+		HANDLE_VALUE("chirp_control_rate", config.chirp_control_rate,    						val * FS_CONFIG_RATE_ONE_HZ / 100, val >= 0);			//MK: Added for Chirp Control
+		HANDLE_VALUE("chirp_control_min_duration", config.chirp_control_min_duration,    		val, (val >= 10 || val <= 2000));						//MK: Added for Chirp Control
+		HANDLE_VALUE("chirp_control_max_duration", config.chirp_control_max_duration,   val, (val >= 10 || val <= 2000));						//MK: Added for Chirp Control
+
+		//################## MK: whole next block added for navMK
+		HANDLE_VALUE("navMK_Pull_Lat", config.pull_lat,    val, (val >= -90*NAVMK_WGS84_MULTIPLIER && val <= 90*NAVMK_WGS84_MULTIPLIER));
+		HANDLE_VALUE("navMK_Pull_Lon", config.pull_lon,    val, (val >= -180*NAVMK_WGS84_MULTIPLIER && val <= 180*NAVMK_WGS84_MULTIPLIER));
+		HANDLE_VALUE("navMK_Pull_Alt", config.pull_alt,    val, TRUE);
+		HANDLE_VALUE("navMK_Leg1", config.leg1_heading,    val, (val >= 0 && val <= 360));
+		HANDLE_VALUE("navMK_Leg2", config.leg2_heading,    val, (val >= 0 && val <= 360));
+		HANDLE_VALUE("navMK_Leg3", config.leg3_heading,    val, (val >= 0 && val <= 360));
+		HANDLE_VALUE("navMK_numLegs", config.navMK_numLegs, val, (val >= 0 && val <= 3));
+		HANDLE_VALUE("navMK_Average_Glide_Ratio", config.av_glide_ratio, val, TRUE);
+		HANDLE_VALUE("navMK_exit_altitude", config.exit_altitude, val, (val>=1000 && val <= 12000));
+		HANDLE_VALUE("navMK_Ground_Debug", config.navMK_Ground_Debug, val, (val == 0 || val == 1));
+		HANDLE_VALUE("navMK_jump_threshold", config.navMK_jump_threshold,    val, (val >= 0 && val <= 255));
+		HANDLE_VALUE("navMK_preturn_alert", config.navMK_preturn_alert,    val, (val >= 0 && val <= 255));
+
+		//################## MK: whole next block added for WS Performance competition (lane keeping navigation)
+		HANDLE_VALUE("WScomp_compwindow_top", config.WScomp_compwindow_top,    val, (val >= 0 && val <= 10000));
+		HANDLE_VALUE("WScomp_compwindow_bottom", config.WScomp_compwindow_bottom,    val, (val >= 0 && val <= 10000));
+		HANDLE_VALUE("WScomp_exit_max", config.WScomp_exit_max,    val, (val >= 0 && val <= 10000));
+		HANDLE_VALUE("WScomp_exit_min", config.WScomp_exit_min,    val, (val >= 0 && val <= 10000));
+		HANDLE_VALUE("WScomp_valwindow_speed", config.WScomp_valwindow_speed,    val, (val >= 0 && val <= 100));
+		HANDLE_VALUE("WScomp_valwindow_delay", config.WScomp_valwindow_delay,    val, (val >= 0 && val <= 100));
+		HANDLE_VALUE("WScomp_GRP_lat", config.WScomp_GRP_lat,    val, (val >= -90*WSCOMP_WGS84_MULTIPLIER && val <= 90*WSCOMP_WGS84_MULTIPLIER));
+		HANDLE_VALUE("WScomp_GRP_lon", config.WScomp_GRP_lon,    val, (val >= -180*WSCOMP_WGS84_MULTIPLIER && val <= 180*WSCOMP_WGS84_MULTIPLIER));
+		HANDLE_VALUE("WScomp_DFP_width", config.WScomp_DFP_width,    val, (val >= 0 && val <= 10000));
+		HANDLE_VALUE("WScomp_Ground_Debug", config.WScomp_Ground_Debug,    val, (val == 0 || val == 1));
+
 		HANDLE_VALUE("Sp_Rate",   config.sp_rate,      val * 1000, val >= 0 && val <= 32);
 		HANDLE_VALUE("Sp_Volume", config.sp_volume,    8 - val, val >= 0 && val <= 8);
 		HANDLE_VALUE("V_Thresh",  config.threshold,    val, TRUE);
@@ -345,6 +451,7 @@ FS_Config_Result_t FS_Config_Read(const char *filename)
 		HANDLE_VALUE("Enable_Mag",     config.enable_mag,     val, val == 0 || val == 1);
 		HANDLE_VALUE("Ble_Tx_Power",   config.ble_tx_power,   val, val >= 0 || val <= 31);
 		HANDLE_VALUE("Enable_Raw",     config.enable_raw,     val, val == 0 || val == 1);
+		HANDLE_VALUE("Enable_MKlog",   config.enable_mklog,   val, val == 0 || val == 1);	//MK: Added for MK Debug Log
 		HANDLE_VALUE("Cold_Start",     config.cold_start,     val, val == 0 || val == 1);
 
 		HANDLE_VALUE("Baro_ODR",  config.baro_odr,     val, val >= 0 && val <= 7);

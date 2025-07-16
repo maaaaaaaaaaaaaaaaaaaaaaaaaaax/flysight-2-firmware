@@ -36,6 +36,7 @@
 #define FS_LOG_ENABLE_SENSOR 0x02
 #define FS_LOG_ENABLE_RAW    0x04
 #define FS_LOG_ENABLE_EVENT  0x08
+#define FS_LOG_ENABLE_MKLOG  0x10	//MK: Added debug log
 #define FS_LOG_ENABLE_ALL    0xff
 
 void FS_Log_Init(uint32_t sessionId, uint8_t flags);
@@ -50,6 +51,7 @@ void FS_Log_WriteGNSSRaw(const FS_GNSS_Raw_t *current);
 void FS_Log_WriteIMUData(const FS_IMU_Data_t *current);
 void FS_Log_WriteVBATData(const FS_VBAT_Data_t *current);
 void FS_Log_WriteEvent(const char *format, ...);
+void FS_Log_MKlog(const char *format, ...);	//MK: Added debug log
 
 void FS_Log_UpdatePath(const FS_GNSS_Data_t *current);
 

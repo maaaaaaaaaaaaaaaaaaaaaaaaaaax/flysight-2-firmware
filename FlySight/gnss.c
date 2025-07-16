@@ -264,7 +264,7 @@ typedef struct
 	int32_t  velD;     // Down velocity                (cm/s)
 	uint32_t speed;    // 3D speed                     (cm/s)
 	uint32_t gSpeed;   // Ground speed                 (cm/s)
-	int32_t  heading;  // 2D heading                   (deg)
+	int32_t  heading;  // 2D heading                   (0.00001 deg) (Heading of 355° is reported as 35500000)
 	uint32_t sAcc;     // Speed accuracy estimate      (cm/s)
 	uint32_t cAcc;     // Heading accuracy estimate    (deg)
 }

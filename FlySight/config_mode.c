@@ -34,7 +34,7 @@
 #define PLAY_TIMER_MSEC    10
 #define PLAY_TIMER_TICKS   (PLAY_TIMER_MSEC*1000/CFG_TS_TICK_VAL)
 
-#define WAIT_TIMER_MSEC    500
+#define WAIT_TIMER_MSEC    3000	//MK: [ms] Time to wait after playing each config file starting sound until next config file is selected while in "config mode selection mode". Changed from 500ms to 3000ms. This gives more time to turn off flysight when the wanted config file is currently selected.
 #define WAIT_TIMER_TICKS   (WAIT_TIMER_MSEC*1000/CFG_TS_TICK_VAL)
 
 static DIR dir;

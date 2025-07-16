@@ -32,6 +32,10 @@
 #include "config.h"
 #include "nav.h"
 #include "stm32_seq.h"
+#include "navMK.h"
+#include "WScomp.h"
+#include "speedMK.h"
+#include "log.h" //MK: Added to be able to access my debug log
 
 #define CONSUMER_TIMER_MSEC    10
 #define CONSUMER_TIMER_TICKS   (CONSUMER_TIMER_MSEC*1000/CFG_TS_TICK_VAL)
@@ -76,6 +80,7 @@ static char *speech_ptr;
 
 static volatile uint32_t tonePitch;
 static volatile int32_t  toneChirp;
+static volatile int32_t  durationChirp; //[ms] Sets the duration of a chirp
 static volatile uint16_t toneRate;
 static volatile uint8_t  toneHold;
 
@@ -86,14 +91,23 @@ static void setRate(uint16_t rate)
 
 static void setPitch(uint16_t pitch)
 {
+//	FS_Log_MKlog("setPitch: %i", pitch);
 	tonePitch = pitch;
 }
 
 static void setChirp(uint32_t chirp)
 {
+//	FS_Log_MKlog("setChirp: %i", chirp);
 	toneChirp = chirp;
 }
 
+static void setDurationChirp(uint32_t duration)	//MK: Added for chirp control. Duration in ms
+{
+//	FS_Log_MKlog("setDurationChirp: %i", duration);
+	durationChirp = duration;
+}
+
+//MK: val1 sets tone pitch, val2 sets tone rate
 static void setTone(
 	FS_Config_Data_t *config,
 	int32_t val_1,
@@ -109,77 +123,118 @@ static void setTone(
 	if (val_1 != INVALID_VALUE &&
 	    val_2 != INVALID_VALUE)
 	{
-		if (UNDER(val_2, min_2, max_2))
+		if (config->chirp_control)//MK: Added chirp control
 		{
-			if (config->flatline)
-			{
-				setRate(FS_CONFIG_RATE_FLATLINE);
-			}
-			else
-			{
-				setRate(config->min_rate);
-			}
-		}
-		else if (OVER(val_2, min_2, max_2))
-		{
-			setRate(config->max_rate - 1);
-		}
-		else
-		{
-			setRate(config->min_rate + (config->max_rate - config->min_rate) * (val_2 - min_2) / (max_2 - min_2));
-		}
 
-		if (UNDER(val_1, min_1, max_1))
-		{
-			if (config->limits == 0)
+			setRate(config->chirp_control_rate);
+//			FS_Log_MKlog("Chirp_Control_Rate: %i", config->chirp_control_rate);
+			if (UNDER(val_2, min_2, max_2))		//Set chirp rate according to val_2
 			{
-				setRate(0);
+				setDurationChirp(config->chirp_control_min_duration);
 			}
-			else if (config->limits == 1)
+			else if (OVER(val_2, min_2, max_2))
 			{
-				setPitch(TONE_MIN_PITCH);
-				setChirp(0);
-			}
-			else if (config->limits == 2)
-			{
-				setPitch(TONE_MIN_PITCH);
-				setChirp(TONE_MAX_PITCH - TONE_MIN_PITCH);
+				setDurationChirp(config->chirp_control_max_duration);
 			}
 			else
 			{
-				setPitch(TONE_MAX_PITCH);
-				setChirp(TONE_MIN_PITCH - TONE_MAX_PITCH);
+				setDurationChirp(config->chirp_control_min_duration + (config->chirp_control_max_duration - config->chirp_control_min_duration)*(val_2 - min_2)/(max_2-min_2));
 			}
-		}
-		else if (OVER(val_1, min_1, max_1))
-		{
-			if (config->limits == 0)
+
+			if (UNDER(val_1, min_1, max_1))		//Set chirp frequency change according to val_1
 			{
-				setRate(0);
+				setPitch(config->chirp_control_min_freq);
+				setChirp((config->chirp_control_max_freq - config->chirp_control_min_freq)/2);
 			}
-			else if (config->limits == 1)
+			else if (OVER(val_1, min_1, max_1))
 			{
-				setPitch(TONE_MAX_PITCH);
-				setChirp(0);
-			}
-			else if (config->limits == 2)
-			{
-				setPitch(TONE_MAX_PITCH);
-				setChirp(TONE_MIN_PITCH - TONE_MAX_PITCH);
+				setPitch(config->chirp_control_max_freq);
+				setChirp(-1*(config->chirp_control_max_freq - config->chirp_control_min_freq)/2);
 			}
 			else
 			{
-				setPitch(TONE_MIN_PITCH);
-				setChirp(TONE_MAX_PITCH - TONE_MIN_PITCH);
+				setPitch(config->chirp_control_min_freq + (config->chirp_control_max_freq-config->chirp_control_min_freq)*(val_1 - min_1)/(max_1-min_1));
+				setChirp((config->chirp_control_max_freq-config->chirp_control_min_freq)/2 - (config->chirp_control_max_freq-config->chirp_control_min_freq)*(val_1 - min_1)/(max_1-min_1));
 			}
 		}
-		else
+		else	//chirp control not enabled, use normal beeps
 		{
-			setPitch(TONE_MIN_PITCH + (TONE_MAX_PITCH - TONE_MIN_PITCH) * (val_1 - min_1) / (max_1 - min_1));
-			setChirp(0);
+			if (UNDER(val_2, min_2, max_2))	//MK: If val2 is lower than allowed minimum rate
+			{
+				if (config->flatline)
+				{
+					setRate(FS_CONFIG_RATE_FLATLINE);
+				}
+				else
+				{
+					setRate(config->min_rate);
+				}
+			}
+			else if (OVER(val_2, min_2, max_2)) //MK: If val2 is higher than allowed maximum rate
+			{
+				setRate(config->max_rate - 1);
+			}
+			else	//MK: val2 within limits
+			{
+				setRate(config->min_rate + (config->max_rate - config->min_rate) * (val_2 - min_2) / (max_2 - min_2));
+			}
+
+			if (UNDER(val_1, min_1, max_1))	//MK: If tone pitch is below limit
+			{
+				if (config->limits == 0)
+				{
+					setRate(0);
+				}
+				else if (config->limits == 1)
+				{
+					setPitch(TONE_MIN_PITCH);
+					setChirp(0);
+				}
+				else if (config->limits == 2)
+				{
+					setPitch(TONE_MIN_PITCH);
+					setChirp(TONE_MAX_PITCH - TONE_MIN_PITCH);
+					setDurationChirp(125);
+				}
+				else
+				{
+					setPitch(TONE_MAX_PITCH);
+					setChirp(TONE_MIN_PITCH - TONE_MAX_PITCH);
+					setDurationChirp(125);
+				}
+			}
+			else if (OVER(val_1, min_1, max_1))	//MK: If tone pitch is above limit
+			{
+				if (config->limits == 0)
+				{
+					setRate(0);
+				}
+				else if (config->limits == 1)
+				{
+					setPitch(TONE_MAX_PITCH);
+					setChirp(0);
+				}
+				else if (config->limits == 2)
+				{
+					setPitch(TONE_MAX_PITCH);
+					setChirp(TONE_MIN_PITCH - TONE_MAX_PITCH);
+					setDurationChirp(125);
+				}
+				else
+				{
+					setPitch(TONE_MIN_PITCH);
+					setChirp(TONE_MAX_PITCH - TONE_MIN_PITCH);
+					setDurationChirp(125);
+				}
+			}
+			else	//MK: tone pitch is within limits
+			{
+					setPitch(TONE_MIN_PITCH + (TONE_MAX_PITCH - TONE_MIN_PITCH) * (val_1 - min_1) / (max_1 - min_1));
+					setChirp(0);
+			}
 		}
 	}
-	else
+	else	//val_1 and/or val_2 has invalid value -> Don't play anything.
 	{
 		setRate(0);
 	}
@@ -622,7 +677,7 @@ static void updateAlarms(
 	suppress_tone = 0;
 	suppress_alt = 0;
 
-	for (i = 0; i < config->num_alarms; ++i)
+	for (i = 0; i < config->num_alarms; ++i)	//MK: Suppress tone if alarm is active
 	{
 		const int32_t alarm_elev = config->alarms[i].elev + config->dz_elev;
 
@@ -634,7 +689,7 @@ static void updateAlarms(
 		}
 	}
 
-	for (i = 0; i < config->num_windows; ++i)
+	for (i = 0; i < config->num_windows; ++i)	//MK: suppress tone and alt (TBD) if currently in silence window
 	{
 		if ((config->windows[i].bottom + config->dz_elev <= current->hMSL) &&
 		    (config->windows[i].top + config->dz_elev >= current->hMSL))
@@ -649,7 +704,7 @@ static void updateAlarms(
 	{
 		if (config->alt_units == FS_CONFIG_UNITS_METERS)
 		{
-			step_size = 10000 * config->alt_step;
+			step_size = 10000 * config->alt_step;	//MK: step_size in [0.1mm]
 		}
 		else
 		{
@@ -736,6 +791,7 @@ static void updateTones(
 	FS_Config_Data_t *config,
 	FS_GNSS_Data_t *current)
 {
+
 	const int32_t velD = current->velD / 10;
 
 	static int32_t x0 = INVALID_VALUE, x1, x2;
@@ -799,9 +855,52 @@ static void updateTones(
 			val_2 = (int32_t) 10000 * ABS(val_2) / ABS(max_1 - min_1);
 		}
 	}
+	else if (config->mode_2 == FS_CONFIG_MODE_MK)	//MK: Added FS_CONFIG_MODE_MK
+	{
+		//MK: Mode(1) is irrelevant
+		val_1 = 500; //config->min_chirp; //From where to start tone (TODO: change to actual measured value)
+		val_2 = 100; //1Hz rate
+	}
+	else if (config->mode_2 == FS_CONFIG_MODE_NAVMK)	//to be used with chirp control
+	{
+		//MK: Mode(1) is irrelevant
+		min_1 = -200;
+		max_1 = +200;
+		navMK_check_advance_phase(current);
+		val_1 = navMK_get_Headingerror(current);
+
+		min_2 = 0;
+		max_2 = 200;
+		val_2 = val_1<0 ? -val_1 : val_1; //val_2 == abs(val_1)
+	}
+	else if (config->mode_2 == FS_CONFIG_MODE_WSCOMP) //to be used with chirp control
+	{
+		//MK: Mode(1) is irrelevant
+		min_1 = -200;
+		max_1 = +200;
+		WScomp_check_advance_phase(current);
+		val_1 = WScomp_get_Headingerror(current);
+
+		min_2 = 0;
+		max_2 = 200;
+		val_2 = val_1<0 ? -val_1 : val_1; //val_2 == abs(val_1)
+
+	}
+	else if (config->mode_2 == FS_CONFIG_MODE_MKSPEED) //to be used with chirp control
+	{
+		//MK: Mode(1) is irrelevant
+		min_1 = -20;
+		max_1 = +20;
+		speedMK_check_advance_phase(current);
+		val_1 = speedMK_get_Glideratioerror(current);
+
+		min_2 = 0;
+		max_2 = 20;
+		val_2 = val_1<0 ? -val_1 : val_1; //val_2 == abs(val_1)
+	}
 	else
 	{
-		getValues(current, config, config->mode_2, &val_2, &min_2, &max_2);
+		getValues(current, config, config->mode_2, &val_2, &min_2, &max_2); //MK: When Glide Ratio is set, this is where the tone is calculated.
 	}
 
 	if (!g_suppress_tone)
@@ -894,7 +993,7 @@ static void consumerTimer(void)
 
 	if (FS_Audio_IsIdle() && !toneHold && toneRate > 0 && 0x10000 - tone_timer <= toneRate)
 	{
-		FS_Audio_Beep(tonePitch, tonePitch + toneChirp, 125, config->volume * 5);
+		FS_Audio_Beep(tonePitch, tonePitch + toneChirp, durationChirp, config->volume * 5);	//MK: added durationChirp for chirp control
 	}
 
 	tone_timer += toneRate;
@@ -1112,6 +1211,7 @@ void FS_AudioControl_Init(void)
 	speech_ptr = speech_buf;
 	tonePitch = 0;
 	toneChirp = 0;
+	durationChirp = 125;	//MK: Added for chirp control
 	toneRate = 0;
 	toneHold = 0;
 

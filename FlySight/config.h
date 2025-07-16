@@ -52,6 +52,10 @@
 #define FS_CONFIG_MODE_LEFT_RIGHT                10
 #define FS_CONFIG_MODE_DIVE_ANGLE                11
 #define FS_CONFIG_MODE_ALTITUDE                  12
+#define FS_CONFIG_MODE_MK		 				 13	//Debug Mode to test new functionalities
+#define FS_CONFIG_MODE_NAVMK					 14	//Mode to navigate through 3 different legs (headings) to end up at specific pull point (lat lon alt)
+#define FS_CONFIG_MODE_WSCOMP					 15	//Mode to navigate yourself to the center line of the designated lane according to FAI rules
+#define FS_CONFIG_MODE_MKSPEED					 16 //Mode to indicate the perfect glide ratio for a wingsuit performance speed run
 
 #define FS_CONFIG_UNITS_KMH     0
 #define FS_CONFIG_UNITS_MPH     1
@@ -102,6 +106,40 @@ typedef struct
 	int32_t  max_rate;
 	uint8_t  flatline;
 
+	uint8_t  chirp_control;					//MK: Set to 1 to enable chirp control. Chirp always starts in the exact middle of start freq and end freq and goes up or down from here.
+	int32_t  chirp_control_min_freq;		//[Hz] Lowest chirp start frequency
+	int32_t  chirp_control_max_freq;		//[Hz] Highest chirp end frequency
+	int16_t  chirp_control_rate; 			//[0.01Hz] Sets rate of chirps. Value of 100 equals 1Hz.
+	int32_t  chirp_control_min_duration; 	//[ms] Minimum duration of a chirp
+	int32_t  chirp_control_max_duration; 	//[ms] Maximum duration of a chirp. Make sure not to go higher than allowed by the rate of chirps. (If rate of chirps is at 1Hz, max duration must be below 1000ms to make sense)
+
+	//################## MK: whole next block added for navMK
+	int32_t pull_lat;	 	//[0.00001°] verify with NAVMK_WGS84_MULTIPLIER (gives us a resolution of 1.11m)
+	int32_t pull_lon;		//[0.00001°] verify with NAVMK_WGS84_MULTIPLIER (gives us a resolution of 1.11m at equator and less anywhere else)
+	int32_t pull_alt;		//[m]
+	int16_t leg1_heading; 	//[°]
+	int16_t leg2_heading; 	//[°]
+	int16_t leg3_heading; 	//[°]
+	uint8_t	navMK_numLegs;	//[1]
+	uint16_t av_glide_ratio; //[0.01]
+	uint16_t exit_altitude;	//[m]
+	uint8_t navMK_jump_threshold; //[km/h]
+	uint8_t navMK_preturn_alert; //[m/deg] how many meters before a turn to switch to the next leg. (Prealert distance = preturn_alert * turnangle)
+	uint8_t navMK_Ground_Debug; //used to debug on ground using time instead of altitude
+
+	//################## MK: whole next block added for WS Performance competition
+	uint16_t WScomp_compwindow_top;		//[m] Top of the competition window (2500m for FAI)
+	uint16_t WScomp_compwindow_bottom;	//[m] Bottom of the competition window (1500m for FAI)
+	uint16_t WScomp_exit_max;			//[m] Maximum exit altitude for jump to count (3353m for FAI)
+	uint16_t WScomp_exit_min;			//[m] Minimum exit altitude for jump to count (3200m for FAI)
+	uint8_t WScomp_valwindow_speed;		//[m/s] Vertical speed to be exceeded to start validation window (10m/s for FAI)
+	uint8_t WScomp_valwindow_delay;		//[s] Delay between Exceeding vertical speed and actual start of validation window (9s for FAI).
+	int32_t WScomp_GRP_lat;				//[0.00001°] verify with WSCOMP_WGS84_MULTIPLIER (gives us a resolution of 1.11m) Ground Reference point Latitude. Used in combination with position at start of validation window to calculate designated flight path.
+	int32_t WScomp_GRP_lon;				//[0.00001°] verify with WSCOMP_WGS84_MULTIPLIER (gives us a resolution of 1.11m at equator and less anywhere else)Ground Reference point Longitude. Used in combination with position at start of validation window to calculate designated flight path.
+	uint16_t WScomp_DFP_width;			//[m] Total width of designated flight path (600m for FAI)
+	uint8_t WScomp_Ground_Debug; 		//used to debug on ground using time instead of altitude
+
+
 	uint16_t sp_rate;
 	uint16_t sp_volume;
 
@@ -119,7 +157,7 @@ typedef struct
 
 	int32_t  alarm_window_above;
 	int32_t  alarm_window_below;
-	int32_t  dz_elev;
+	int32_t  dz_elev; 	//[in mm] Inside config file it's saved as m, but when the config file is read, the value is converted from m to mm.
 
 	FS_Config_Alarm_t alarms[FS_CONFIG_MAX_ALARMS];
 	uint8_t  num_alarms;
@@ -141,6 +179,7 @@ typedef struct
 	uint8_t  enable_mag;
 	uint8_t  ble_tx_power;
 	uint8_t  enable_raw;
+	uint8_t  enable_mklog; //MK: Added for debug logging
 	uint8_t  cold_start;
 
 	uint8_t  baro_odr;

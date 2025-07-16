@@ -38,6 +38,9 @@
 #include "sensor.h"
 #include "state.h"
 #include "vbat.h"
+#include "navMK.h"
+#include "WScomp.h"
+#include "speedMK.h"
 
 extern UART_HandleTypeDef huart1;
 extern ADC_HandleTypeDef hadc1;
@@ -80,6 +83,7 @@ void FS_ActiveMode_Init(void)
 		if (FS_Config_Get()->enable_mag)  enable_flags |= FS_LOG_ENABLE_SENSOR;
 		if (FS_Config_Get()->enable_vbat) enable_flags |= FS_LOG_ENABLE_SENSOR;
 		if (FS_Config_Get()->enable_raw)  enable_flags |= FS_LOG_ENABLE_RAW;
+		if (FS_Config_Get()->enable_mklog)  enable_flags |= FS_LOG_ENABLE_MKLOG;
 
 		// Enable logging
 		FS_Log_Init(FS_State_Get()->temp_folder, enable_flags);
@@ -171,6 +175,19 @@ void FS_ActiveMode_Init(void)
 	{
 		/* Start reading sensors */
 		FS_Sensor_Start();
+	}
+
+	if (FS_Config_Get()->mode_2 == FS_CONFIG_MODE_NAVMK)
+	{
+		navMK_Init();
+	}
+	if (FS_Config_Get()->mode_2 == FS_CONFIG_MODE_WSCOMP)
+	{
+		WScomp_Init();
+	}
+	if (FS_Config_Get()->mode_2 == FS_CONFIG_MODE_MKSPEED)
+	{
+		speedMK_Init();
 	}
 }
 

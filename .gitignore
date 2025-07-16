@@ -13,3 +13,9 @@ Binary/
 
 # Locally stored "Eclipse launch configurations"
 *.launch
+.cproject
+.cproject
+.mxproject
+.cproject
+postbuild.bat
+prebuild.bat
