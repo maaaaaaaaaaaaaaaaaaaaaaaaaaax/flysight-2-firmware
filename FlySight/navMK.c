@@ -12,7 +12,7 @@
 #include "audio.h"
 
 static FS_navMK_State_t navMK_state;
-static uint8_t reachable;
+
 
 #define DEG_TO_RAD M_PI/180.0
 
@@ -27,11 +27,10 @@ void navMK_Init()	//Init, should be called before each jump.
 	const FS_Config_Data_t *config = FS_Config_Get();
 
 	navMK_state.phase = 0;
-	reachable = 0;		//Todo: Move into navMK_check_advance_phase()
 
 	float phi = atan(1.0/((double)config->av_glide_ratio/100.0)); //phi in rad
 	FS_Log_MKlog("phi*1000: %i", (int32_t)(phi*1000.0));
-	FS_XYZvector_t L1, L2, L3;	// [mm] NED vector for each leg
+	FS_XYZvector_t L1, L2, L3;	// [m] NED vector for each leg
 
 	L1.x = cos((float)config->leg1_heading*DEG_TO_RAD)*cos(phi);	//using NED -> xyz
 	L1.y = sin((float)config->leg1_heading*DEG_TO_RAD)*cos(phi);
@@ -76,6 +75,7 @@ void navMK_check_advance_phase(FS_GNSS_Data_t *current)
 
 	const FS_Config_Data_t *config = FS_Config_Get();
 
+	static uint8_t reachable;
 
 	navMK_calc_P(current->lat, current->lon, current->hMSL - config->dz_elev);	//Calculate the NED values from jumpers position to pull point
 
@@ -94,6 +94,7 @@ void navMK_check_advance_phase(FS_GNSS_Data_t *current)
 			FS_Audio_Play("apexalt.wav", config->sp_volume * 5);
 			navMK_state.phase++;
 			FS_Log_MKlog("Change to phase %i", navMK_state.phase);
+			reachable = 0;
 		}
 		break;
 	case 1: //Wait for exit (vertical velocity exceeding threshold). Tell jumper is pull point is reachable (and also if it is out of reach again)
